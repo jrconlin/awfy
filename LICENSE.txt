@@ -1,0 +1,7 @@
+= License
+
+    This is crappy, demo code.
+    There's no license. Do with this as you will.
+    Likewise it's not my fault if anything bad happens.
+
+

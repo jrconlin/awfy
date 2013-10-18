@@ -75,6 +75,8 @@ function showApp(e) {
             "http://app.evilonastick.com/img/hr_icon_32.jpg");
     // try to display the app on click.
     note.onclick = function() {
+        // TODO: Not sure why this isn't refeshing on launch. May need to
+        // add some code to force it.
         navigator.mozApps.getSelf().launch();
     };
     note.show();
@@ -86,6 +88,8 @@ function canPush() {
         // install the "push" message handler.
         console.debug("Adding handler...");
         if (navigator.mozSetMessageHandler) {
+            // Not sure why I have to wrap this call. May have to do with
+            // showApp's context not being created when this is assigned.
             navigator.mozSetMessageHandler('push', function(e){showApp(e);});
         }
         if (!docCookies.hasItem("pr")) {
