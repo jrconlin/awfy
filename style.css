@@ -1,0 +1,127 @@
+* {margin:0; padding:0;}
+html {height:100%;}
+body {font-family: Arial; text-align:center;
+background: #eee url('img/office2.png') no-repeat center center fixed;
+min-height:100%;
+background-size:cover;
+}
+.days {margin: auto; font-size: 200%; background-image: -moz-linear-gradient(
+    center bottom,
+    rgb(128,128,128) 0%,
+    rgb(250,242,242) 25%,
+    rgb(250,242,242) 75%,
+    rgb(28,28,28) 100%
+);width: 6EX; border: 1px solid #DDD;}
+h3 {font-style:italic; }
+.sign {margin: 100px auto;
+    min-width: 290px;
+    max-width: 500px;
+    border: 5px solid black;
+    border-radius: 30px;
+    box-shadow: 10px 10px 10px #000;
+    background: #FFF;}
+.period { border:1px solid #FFF057;
+    font-family: 'Nothing You Could Do', cursive;
+    display: inline-block;
+    background-color: yellow;
+    background-image: -moz-linear-gradient(
+        center bottom,
+        rgb(255,237,99) 46%,
+        rgb(255,242,122) 73%,
+        rgb(255,243,112) 87%
+    );
+    border-left-color: yellow;
+    -moz-transform: rotate(-15deg);
+    -webkit-transform: rotate(-15deg);
+    box-shadow: 5px 5px 5px rgb(100,100,100);
+
+    }
+.r {
+    background-color:#C20000;
+    background-image:
+    -moz-linear-gradient(
+            center bottom,
+            rgb(194,35,30) 20%,
+            rgb(233,63,57) 60%,
+            rgb(255,95,86) 80%
+    );
+    -webkit-linear-gradient(
+            center bottom,
+            #000 %20,
+            #FFF %60,
+            #EEE %80,
+
+    );
+    box-shadow: 5px 5px 5px #000;
+    border: 8px solid white;
+    border-radius: 30px;
+    font-size:400%;
+    width: 4em;
+    padding:5px 20px;
+    margin: 0 auto;
+}
+
+.reset{
+    color:white;
+    text-shadow: 3px 3px 3px #080000;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.psmall {-moz-transform: rotate(10deg);
+        -webkit-transform: rotate(10deg);
+    }
+.old {text-decoration: strike-through;}
+
+#webapp {
+background-color:rgba(250,250,250,0.6);
+color: rgb(10,10,40);
+width:100%;
+min-height:2em;
+position:absolute;
+bottom:0;
+margin:10px auto 0 auto;
+border-radius:10px;
+box-shadow: 5px 5px 5px #222;
+display:none;
+}
+
+#pushctl {
+    display:none;
+}
+
+#install {
+    display:none;
+    background:transparent;
+    width:100%;
+    height:2em;
+    border:0;
+}
+
+#register {
+    display:none;
+}
+
+.debug {
+    color:white;
+}
+
+@media screen and (min-width: 0px) {
+   .sign { margin:10px auto;
+       font-size: 80%;
+    }
+
+    .reset {
+        font-size:200%;
+    }
+}
+
+@media screen and (min-width: 768px) {
+    .sign { margin: 100px auto;
+        font-size:auto;
+    }
+
+    .reset {
+        font-size: 400%;
+    }
+}
