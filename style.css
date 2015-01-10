@@ -20,6 +20,14 @@ h3 {font-style:italic; }
     border-radius: 30px;
     box-shadow: 10px 10px 10px #000;
     background: #FFF;}
+#length {
+    margin: 0 auto;
+    width: 4em;
+    font-size: 120%;
+    font-family: 'Iceland', monospace;
+    color: #0D0;
+    background-color: #333;
+}
 .period { border:1px solid #FFF057;
     font-family: 'Nothing You Could Do', cursive;
     display: inline-block;

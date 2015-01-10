@@ -1,0 +1,109 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="viewport" content="initial-scale=1.0">
+<title>Are We Fired Yet?</title>
+<link href='http://fonts.googleapis.com/css?family=Nothing+You+Could+Do&v2' rel='stylesheet' type='text/css'>
+<link href='http://fonts.googleapis.com/css?family=Iceland' rel='stylesheet' type='text/css'>
+<link rel="stylesheet" href="style.css" type="text/css" />
+<!-- meta http-equiv="refresh" content="60;url=http://<?php print $host ?>" / -->
+<link rel="icon" href="img/hr_icon.png" type="image/x-icon" />
+<link rel="apple-touch-icon" href="img/hr_icon_128.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="viewport" content="width = device-width" />
+<meta name="viewport" content="initial-scale = 1.0" />
+<meta property="og:url" content="http://awfy.evilonastick.com/" />
+<meta property="og:image" content="http://awfy.evilonastick.com/img/hr_icon_128.png" />
+<meta property="og:title" content="Are we fired yet?" />
+<meta property="og:type" content="website" />
+</head>
+<body>
+<div class="sign">
+<h1>It has been
+<div class="length" id="length">...</div>
+<span class="period">minutes</span> since the last<br/> HR Violation.</h1>
+<h2>Previous period was <span class="prev" id="prev">0</span> <span class="psmall period ">minutes</span></h2>
+<h3>Keep up the good work!</h3>
+<audio src="img/buzzer.ogg" id="buzz" />
+</div>
+<input id="reset" type="submit" value="reset" class="r reset" />
+<div id="webapp">
+<div id="pushctl"><b>Neato! You can do push!</b><br>Tap me to know when resets happen</div>
+<button id="install">Tap me to install as an app.</button>
+</div>
+<div id="bucket" style="display:none"></div>
+<script lang="javascript">
+    var HOST = "awfy.evilonastick.com";
+    var PORT = ":8080";
+    var ws;
+    var period = {length:60000, label:"minutes"};
+
+
+    function doReset(ws) {
+        document.getElementById("buzz").play();
+        document.getElementById("length").innerHTML = "0";
+        if (ws == undefined) {
+        console.error("Websocket not present!");
+        } else {
+        ws.send("reset");
+        }
+    }
+
+    function updateClock() {
+        var ll = document.getElementById("length");
+        var v = parseInt(ll.innerHTML);
+        if (isNaN(v)) { v = 0 }
+        ll.innerHTML = v + 1;
+    }
+
+    document.getElementById("reset").addEventListener("click", function(ws) {
+            try {
+                doReset(ws);
+            } catch (x) {
+            }
+            return true;
+            });
+    // open the websocket connection;
+
+if (window.WebSocket == undefined) {
+    // Bitch that they've got an old, crappy browser.
+}
+ws = new WebSocket("ws://" + HOST + PORT);
+ws.onopen = function(e) {
+    console.log("Connected, sending hello");
+    this.send("hello")
+}
+ws.onmessage = function(e) {
+    console.log("Got message: ", e.data);
+    try {
+        msg = JSON.parse(e.data);
+        switch (msg.type) {
+            case "update":
+                update(msg.update);
+                break;
+            case "reset":
+                doReset(this);
+                break;
+            default:
+                console.error("Unknown message", msg);
+        }
+    } catch (x) {
+        console.error("Unknown exception", x)
+    }
+};
+ws.onclose = function(e) { console.log("Closing connection", e);};
+ws.onerror = function(e) { console.error("ERROR::", e); };
+
+setInterval (updateClock, period.length);
+
+</script>
+<script lang="javascript" src="cookie.js"></script>
+<script lang="javascript" src="app1.js"></script>
+</body>
+<span class="debug">
+<?php
+?>
+<span>
+</html>
