@@ -1,12 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"github.com/gorilla/websocket"
 	"html/template"
 	"log"
 	"net/http"
-	"path/filepath"
 )
 
 const DATA_SIZE = 1024
@@ -32,17 +32,50 @@ var h = hub{
 	connections: make(map[*connection]bool),
 }
 
+func trimSpace(in []byte) (out []byte) {
+	const sp byte = byte(' ')
+	const quote byte = byte('"')
+	i := 0
+	prev := sp
+	inq := false
+	outb := make([]byte, len(in))
+	for _, c := range []byte(in) {
+		if c == quote {
+			inq = !inq
+		}
+		if !inq && c == sp && c == prev {
+			continue
+		}
+		outb[i] = c
+		i++
+		prev = c
+	}
+	if len(outb) > 0 && outb[i-1] == sp {
+		outb[i-1] = 0
+	}
+	return outb
+}
+
 func (h *hub) run() {
 	for {
 		select {
 		case c := <-h.register:
+			log.Printf("Registering...\n")
 			h.connections[c] = true
 		case c := <-h.unregister:
 			if _, ok := h.connections[c]; ok {
+				log.Printf("UnRegistering...\n")
 				delete(h.connections, c)
 				close(c.send)
 			}
 		case m := <-h.broadcast:
+			log.Printf("Broadcasting...\n")
+			m = bytes.Map(func(r rune) rune {
+				if r < ' ' {
+					return -1
+				}
+				return r
+			}, m)
 			for c := range h.connections {
 				select {
 				case c.send <- m:
@@ -107,17 +140,15 @@ func wsHandler(resp http.ResponseWriter, req *http.Request) {
 
 func main() {
 	flag.Parse()
-	homeTempl = template.Must(template.ParseFiles(filepath.Join(*tmplPath,
-		"index.html")))
 
-	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-		homeTempl.Execute(resp, req.Host)
+	go h.run()
+	http.HandleFunc("/metrics", func(resp http.ResponseWriter, req *http.Request) {
+		resp.Write([]byte("Sorry, no metrics yet..."))
 	})
-	http.HandleFunc("/ws", wsHandler)
+	http.HandleFunc("/", wsHandler)
+	log.Printf("Starting up server at %s\n", *addr)
 	if err := http.ListenAndServe(*addr, nil); err != nil {
 		log.Fatal("Could not start server:", err)
 	}
-	log.Printf("Starting up server at %s\n", addr)
-	go h.run()
 
 }
