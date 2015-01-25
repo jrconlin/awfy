@@ -23,13 +23,18 @@ var (
 	db     *sql.DB
 )
 
+// Crappy logging function (only if -debug specified)
 func Log(str string, arg ...interface{}) {
 	if *debug {
-		if arg != nil {
-			log.Printf(str, arg)
-		} else {
-			log.Printf(str)
-		}
+		Error(str, arg)
+	}
+}
+
+func Error(str string, arg ...interface{}) {
+	if arg != nil {
+		log.Printf(str, arg)
+	} else {
+		log.Printf(str)
 	}
 }
 
@@ -48,14 +53,18 @@ var h = hub{
 	connections: make(map[*connection]bool),
 }
 
-func (h *hub) run(db *sql.DB) {
+func (h *hub) Count() int {
+	return len(h.connections)
+}
+
+func (h *hub) run(st *store) {
 	h.db = db
 	for {
 		select {
 		case c := <-h.register:
 			Log("Registering...\n")
 			h.connections[c] = true
-			c.db = db
+			c.stcmd = st.cmd
 		case c := <-h.unregister:
 			if _, ok := h.connections[c]; ok {
 				Log("UnRegistering...\n")
@@ -77,7 +86,7 @@ func (h *hub) run(db *sql.DB) {
 	}
 }
 
-func trimSpace(in []byte) (out []byte) {
+func trimSpace(in []byte) (out string) {
 	const sp byte = byte(' ')
 	const quote byte = byte('"')
 	i := 0
@@ -98,21 +107,21 @@ func trimSpace(in []byte) (out []byte) {
 	if len(outb) > 0 && outb[i-1] == sp {
 		outb[i-1] = 0
 	}
-	return outb
+	return string(outb)
 }
 
-type connection struct {
-	ws  *websocket.Conn
-	cmd chan []byte
+type store struct {
 	db  *sql.DB
-	ua  string
+	cmd chan []byte
 }
 
-func (c *connection) getInfo() (reply []byte, err error) {
+func (r *store) getInfo(t string) (reply []byte) {
+	var err error
 	// read latest info
-	row := c.db.QueryRow("select coalesce(time,0), coalesce(previous,0) from resets order by time desc limit 1;")
+	row := r.db.QueryRow("select coalesce(time,0), coalesce(previous,0) from resets order by time desc limit 1;")
 	now := time.Now().UTC().Unix() / 60
 	var lastReset int64
+
 	var resp struct {
 		Type     string `json:"type"`
 		Last     int64  `json:"last"`
@@ -121,52 +130,85 @@ func (c *connection) getInfo() (reply []byte, err error) {
 	err = row.Scan(&lastReset, &resp.Previous)
 	switch {
 	case err == sql.ErrNoRows:
-
 		Log("No data yet...")
 	case err != nil:
+		Error("ERROR: getInfo: %s", err.Error())
 		return
 	}
+
 	if lastReset != 0 {
 		resp.Last = now - lastReset
 	}
-	resp.Type = "i"
+	resp.Type = t
 	reply, err = json.Marshal(resp)
+	if err != nil {
+		Error("ERROR: getInfo: %s", err.Error())
+	}
 	return
 }
 
-func (c *connection) reset() (err error) {
+func (r *store) reset(ua []byte) (reply []byte) {
+	var err error
 	stmt := `insert or ignore into resets (time, previous, ua) values (strftime('%s','now')/60, max(0, (select strftime('%s','now')/60 - time from resets order by time desc limit 1)), ?);`
 	Log("Resetting...")
-	_, err = c.db.Exec(stmt, c.ua)
-	return
+	_, err = r.db.Exec(stmt, string(ua))
+	if err != nil {
+		Error("ERROR: reset: %s", err.Error())
+	}
+	return r.getInfo("r")
+}
+
+func (r *store) run() {
+	for {
+		select {
+		case c := <-r.cmd:
+			if len(c) == 0 {
+				continue
+			}
+			us := string(c)
+			switch us[:1] {
+			case "i":
+				r.cmd <- r.getInfo(us[:1])
+			case "r":
+				r.cmd <- r.reset(c[1:])
+			}
+		}
+	}
+}
+
+type connection struct {
+	ws    *websocket.Conn
+	cmd   chan []byte
+	stcmd chan []byte
+	db    *sql.DB
+	ua    string
 }
 
 func (c *connection) reader() {
 	defer c.ws.Close()
 	for {
-		_, message, err := c.ws.ReadMessage()
+		_, raw, err := c.ws.ReadMessage()
 		if err != nil {
-			log.Printf("ERROR in reader: %s", err.Error())
+			Error("ERROR in reader: %s", err.Error())
 			return
 		}
-		message = trimSpace(message)
+		message := trimSpace(raw)
 		if len(message) == 0 {
 			continue
 		}
-		switch strings.ToLower(string(message[0])) {
+		switch strings.ToLower(message[:1]) {
 		case "i":
-			if info, err := c.getInfo(); err == nil {
-				c.ws.WriteMessage(websocket.TextMessage, info)
-			} else {
-				Log("Could not get info: %s", err)
+			c.stcmd <- []byte("i")
+			res := <-c.stcmd
+			if len(res) > 0 {
+				c.ws.WriteMessage(websocket.TextMessage, res)
 			}
 			continue
 		case "r":
-			err := c.reset()
-			if err == nil {
-				h.broadcast <- []byte(`{"type":"r"}`)
-			} else {
-				Log("Could not reset: %s", err)
+			c.stcmd <- []byte("r" + c.ua)
+			res := <-c.stcmd
+			if len(res) > 0 {
+				h.broadcast <- res
 			}
 		case "q":
 			Log("Closing...")
@@ -227,6 +269,8 @@ func main() {
 	var err error
 	flag.Parse()
 
+	born := time.Now().UTC()
+
 	Log("Opening db at: %s", *dbPath)
 
 	if db, err = sql.Open("sqlite3", *dbPath); err != nil {
@@ -238,10 +282,25 @@ func main() {
 		log.Fatal("Could not create table: %s", err.Error())
 	}
 
-	go h.run(db)
+	st := &store{
+		db:  db,
+		cmd: make(chan []byte),
+	}
+
+	go st.run()
+	go h.run(st)
+
 	http.HandleFunc("/metrics", func(resp http.ResponseWriter, req *http.Request) {
 		Log("Metric request...")
-		resp.Write([]byte("Sorry, no metrics yet..."))
+		rep, _ := json.Marshal(
+			struct {
+				Connections int    `json:"number_connections"`
+				Age         string `json:"server_age"`
+			}{
+				Connections: h.Count(),
+				Age:         time.Now().UTC().Sub(born).String(),
+			})
+		resp.Write(rep)
 	})
 	http.HandleFunc("/", wsHandler)
 	log.Printf("Starting up server at %s\n", *addr)

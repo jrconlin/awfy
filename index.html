@@ -41,9 +41,9 @@
     var period = {length:60000, label:"minutes"};
 
 
-    function doReset(ws) {
+    function doReset(msg) {
         document.getElementById("buzz").play();
-        document.getElementById("length").innerHTML = "0";
+        doUpdate(msg);
     }
 
     function updateClock() {
@@ -53,7 +53,7 @@
         ll.innerHTML = v + 1;
     }
 
-    function doInit(msg) {
+    function doUpdate(msg) {
         document.getElementById("length").innerHTML = msg.last;
         document.getElementById("prev").innerHTML = msg.previous;
     }
@@ -82,10 +82,10 @@ ws.onmessage = function(e) {
         msg = JSON.parse(e.data);
         switch (msg.type) {
             case "i":
-                doInit(msg);
+                doUpdate(msg);
                 break;
             case "r":
-                doReset(this);
+                doReset(msg);
                 break;
             default:
                 console.error("Unknown message", msg);

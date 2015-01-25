@@ -155,7 +155,7 @@ function startApp() {
         console.debug("mozApps present");
         console.debug(navigator.mozApps.getSelf());
     } else {
-        alert("No mozApps");
+        console.error("No mozApps, because you hate the free web.");
     }
 }
 
