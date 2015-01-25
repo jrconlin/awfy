@@ -1,3 +1,9 @@
+/* Based off of the gorilla websocket sample.
+   Heavily modified by me
+
+   Do whatever the hell you want with this code, I don't really care.
+*/
+
 package main
 
 import (
@@ -5,6 +11,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"github.com/gorilla/websocket"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
@@ -13,7 +20,7 @@ import (
 	"time"
 )
 
-const DATA_SIZE = 1024
+const DATA_SIZE = 100
 const CHANNELS = 256
 
 var (
@@ -26,7 +33,11 @@ var (
 // Crappy logging function (only if -debug specified)
 func Log(str string, arg ...interface{}) {
 	if *debug {
-		Error(str, arg)
+		if arg != nil {
+			Error(fmt.Sprintf(str, arg))
+		} else {
+			Error(str)
+		}
 	}
 }
 
@@ -38,6 +49,32 @@ func Error(str string, arg ...interface{}) {
 	}
 }
 
+// Trim up spaces (including inline) in byte arrays
+func trimSpace(in []byte) (out string) {
+	const sp byte = byte(' ')
+	const quote byte = byte('"')
+	i := 0
+	prev := sp
+	inq := false
+	outb := make([]byte, len(in))
+	for _, c := range []byte(in) {
+		if c == quote {
+			inq = !inq
+		}
+		if !inq && c == sp && c == prev {
+			continue
+		}
+		outb[i] = c
+		i++
+		prev = c
+	}
+	if len(outb) > 0 && outb[i-1] == sp {
+		outb[i-1] = 0
+	}
+	return string(outb)
+}
+
+// Distribution hub
 type hub struct {
 	connections map[*connection]bool
 	broadcast   chan []byte
@@ -86,33 +123,12 @@ func (h *hub) run(st *store) {
 	}
 }
 
-func trimSpace(in []byte) (out string) {
-	const sp byte = byte(' ')
-	const quote byte = byte('"')
-	i := 0
-	prev := sp
-	inq := false
-	outb := make([]byte, len(in))
-	for _, c := range []byte(in) {
-		if c == quote {
-			inq = !inq
-		}
-		if !inq && c == sp && c == prev {
-			continue
-		}
-		outb[i] = c
-		i++
-		prev = c
-	}
-	if len(outb) > 0 && outb[i-1] == sp {
-		outb[i-1] = 0
-	}
-	return string(outb)
-}
+// storage functions
+// Using sqlite for now.
 
 type store struct {
 	db  *sql.DB
-	cmd chan []byte
+	cmd chan []byte // this probably should be a struct{cmd, args, err}
 }
 
 func (r *store) getInfo(t string) (reply []byte) {
@@ -176,6 +192,7 @@ func (r *store) run() {
 	}
 }
 
+// connection worker
 type connection struct {
 	ws    *websocket.Conn
 	cmd   chan []byte
@@ -290,7 +307,9 @@ func main() {
 	go st.run()
 	go h.run(st)
 
-	http.HandleFunc("/metrics", func(resp http.ResponseWriter, req *http.Request) {
+	// more crappy metric handling!
+	http.HandleFunc("/metrics", func(resp http.ResponseWriter,
+		req *http.Request) {
 		Log("Metric request...")
 		rep, _ := json.Marshal(
 			struct {
@@ -303,6 +322,7 @@ func main() {
 		resp.Write(rep)
 	})
 	http.HandleFunc("/", wsHandler)
+
 	log.Printf("Starting up server at %s\n", *addr)
 	if err := http.ListenAndServe(*addr, nil); err != nil {
 		log.Fatal("Could not start server:", err)
