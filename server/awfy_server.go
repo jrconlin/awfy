@@ -165,11 +165,12 @@ func (r *store) getInfo(t string) (reply []byte) {
 
 func (r *store) reset(ua []byte) (reply []byte) {
 	var err error
-	stmt := `insert or ignore into resets (time, previous, ua) values (strftime('%s','now')/60, max(0, (select strftime('%s','now')/60 - time from resets order by time desc limit 1)), ?);`
+	stmt := `insert or abort into resets (time, previous, ua) values (strftime('%s','now')/60, max(0, (select strftime('%s','now')/60 - time from resets order by time desc limit 1)), ?);`
 	Log("Resetting...")
 	_, err = r.db.Exec(stmt, string(ua))
 	if err != nil {
 		Error("ERROR: reset: %s", err.Error())
+		return reply
 	}
 	return r.getInfo("r")
 }
@@ -224,6 +225,7 @@ func (c *connection) reader() {
 		case "r":
 			c.stcmd <- []byte("r" + c.ua)
 			res := <-c.stcmd
+			Log("reset: %s", res)
 			if len(res) > 0 {
 				h.broadcast <- res
 			}
