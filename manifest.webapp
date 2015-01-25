@@ -1,9 +1,9 @@
 {
-    "version": "1.1",
+    "version": "2.0",
     "comment": "Name is truncated to 12 characters",
     "name": "Are We Fired Yet?",
     "description": "Helping count the minutes until we're escorted from the building.",
-    "launch_path": "/hr/app.php",
+    "launch_path": "/hr",
     "comment": "icons: keys must be numbers, 32 & 256 are required; 60, 90, 120 are recommended; others suggested",
     "icons":{
         "16": "http://app.evilonastick.com/img/hr_icon_16.jpg",
@@ -16,8 +16,8 @@
         "256": "http://app.evilonastick.com/img/hr_icon_256.png"
     },
     "developer": {
-        "name": "Euben Hadd",
-        "url": "http://192.168.56.10/hr/app.php"
+        "name": "Evil, on a Stick!
+        "url": "http://awfy.evilonastick.com"
     },
     "installs_allowed_from": ["*"],
     "default_locale":"en",
@@ -30,7 +30,7 @@
     },
     "comment": "Apps must live in their own domain, at the top of the domain. *grr*",
     "messages": [
-        {"push": "/hr/app.php"},
-        {"push-register": "/hr/app.php"}
+        {"push": "/hr"},
+        {"push-register": "/hr"}
     ]
 }

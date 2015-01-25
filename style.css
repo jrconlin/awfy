@@ -45,6 +45,15 @@ h3 {font-style:italic; }
 
     }
 .r {
+    box-shadow: 5px 5px 5px #000;
+    border: 8px solid white;
+    border-radius: 30px;
+    font-size:400%;
+    width: 4em;
+    padding:5px 20px;
+    margin: 0 auto;
+}
+.rok{
     background-color:#C20000;
     background-image:
     -moz-linear-gradient(
@@ -60,17 +69,19 @@ h3 {font-style:italic; }
             #EEE %80,
 
     );
-    box-shadow: 5px 5px 5px #000;
-    border: 8px solid white;
-    border-radius: 30px;
-    font-size:400%;
-    width: 4em;
-    padding:5px 20px;
-    margin: 0 auto;
+    linear-gradient(
+            center bottom,
+            rgb(194,35,30) 20%,
+            rgb(233,63,57) 60%,
+            rgb(255,95,86) 80%
+    );
+    color: white;
 }
-
+.rbad{
+    background-color:#CCC;
+    color: #888;
+}
 .reset{
-    color:white;
     text-shadow: 3px 3px 3px #080000;
     text-decoration: none;
     cursor: pointer;

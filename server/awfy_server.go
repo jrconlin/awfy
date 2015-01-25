@@ -2,27 +2,43 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
+	"encoding/json"
 	"flag"
 	"github.com/gorilla/websocket"
-	"html/template"
+	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"net/http"
+	"strings"
+	"time"
 )
 
 const DATA_SIZE = 1024
 const CHANNELS = 256
 
 var (
-	addr      = flag.String("addr", ":8080", "http service address")
-	tmplPath  = flag.String("templates", "tmpl", "path to templates")
-	homeTempl *template.Template
+	addr   = flag.String("addr", ":8080", "http service address")
+	dbPath = flag.String("db", "./awfy.db", "path to templates")
+	debug  = flag.Bool("debug", false, "debugging output")
+	db     *sql.DB
 )
+
+func Log(str string, arg ...interface{}) {
+	if *debug {
+		if arg != nil {
+			log.Printf(str, arg)
+		} else {
+			log.Printf(str)
+		}
+	}
+}
 
 type hub struct {
 	connections map[*connection]bool
 	broadcast   chan []byte
 	register    chan *connection
 	unregister  chan *connection
+	db          *sql.DB
 }
 
 var h = hub{
@@ -30,6 +46,35 @@ var h = hub{
 	register:    make(chan *connection),
 	unregister:  make(chan *connection),
 	connections: make(map[*connection]bool),
+}
+
+func (h *hub) run(db *sql.DB) {
+	h.db = db
+	for {
+		select {
+		case c := <-h.register:
+			Log("Registering...\n")
+			h.connections[c] = true
+			c.db = db
+		case c := <-h.unregister:
+			if _, ok := h.connections[c]; ok {
+				Log("UnRegistering...\n")
+				delete(h.connections, c)
+				close(c.cmd)
+			}
+		case m := <-h.broadcast:
+			Log("Broadcasting...\n")
+			m = bytes.Map(func(r rune) rune {
+				if r < ' ' {
+					return -1
+				}
+				return r
+			}, m)
+			for c := range h.connections {
+				c.cmd <- m
+			}
+		}
+	}
 }
 
 func trimSpace(in []byte) (out []byte) {
@@ -56,58 +101,86 @@ func trimSpace(in []byte) (out []byte) {
 	return outb
 }
 
-func (h *hub) run() {
-	for {
-		select {
-		case c := <-h.register:
-			log.Printf("Registering...\n")
-			h.connections[c] = true
-		case c := <-h.unregister:
-			if _, ok := h.connections[c]; ok {
-				log.Printf("UnRegistering...\n")
-				delete(h.connections, c)
-				close(c.send)
-			}
-		case m := <-h.broadcast:
-			log.Printf("Broadcasting...\n")
-			m = bytes.Map(func(r rune) rune {
-				if r < ' ' {
-					return -1
-				}
-				return r
-			}, m)
-			for c := range h.connections {
-				select {
-				case c.send <- m:
-				default:
-					delete(h.connections, c)
-					close(c.send)
-				}
-			}
-		}
-	}
+type connection struct {
+	ws  *websocket.Conn
+	cmd chan []byte
+	db  *sql.DB
+	ua  string
 }
 
-type connection struct {
-	ws   *websocket.Conn
-	send chan []byte
+func (c *connection) getInfo() (reply []byte, err error) {
+	// read latest info
+	row := c.db.QueryRow("select coalesce(time,0), coalesce(previous,0) from resets order by time desc limit 1;")
+	now := time.Now().UTC().Unix() / 60
+	var lastReset int64
+	var resp struct {
+		Type     string `json:"type"`
+		Last     int64  `json:"last"`
+		Previous int64  `json:"previous"`
+	}
+	err = row.Scan(&lastReset, &resp.Previous)
+	switch {
+	case err == sql.ErrNoRows:
+
+		Log("No data yet...")
+	case err != nil:
+		return
+	}
+	if lastReset != 0 {
+		resp.Last = now - lastReset
+	}
+	resp.Type = "i"
+	reply, err = json.Marshal(resp)
+	return
+}
+
+func (c *connection) reset() (err error) {
+	stmt := `insert or ignore into resets (time, previous, ua) values (strftime('%s','now')/60, max(0, (select strftime('%s','now')/60 - time from resets order by time desc limit 1)), ?);`
+	Log("Resetting...")
+	_, err = c.db.Exec(stmt, c.ua)
+	return
 }
 
 func (c *connection) reader() {
+	defer c.ws.Close()
 	for {
 		_, message, err := c.ws.ReadMessage()
 		if err != nil {
-			log.Printf("ERROR: %s", err.Error())
-			break
+			log.Printf("ERROR in reader: %s", err.Error())
+			return
 		}
-		h.broadcast <- message
+		message = trimSpace(message)
+		if len(message) == 0 {
+			continue
+		}
+		switch strings.ToLower(string(message[0])) {
+		case "i":
+			if info, err := c.getInfo(); err == nil {
+				c.ws.WriteMessage(websocket.TextMessage, info)
+			} else {
+				Log("Could not get info: %s", err)
+			}
+			continue
+		case "r":
+			err := c.reset()
+			if err == nil {
+				h.broadcast <- []byte(`{"type":"r"}`)
+			} else {
+				Log("Could not reset: %s", err)
+			}
+		case "q":
+			Log("Closing...")
+			return
+		default:
+			Log(" WARN: bad command %s", message)
+			return
+		}
 	}
-	c.ws.Close()
 }
 
 func (c *connection) writer() {
-	for message := range c.send {
-		err := c.ws.WriteMessage(websocket.TextMessage, message)
+	for command := range c.cmd {
+		err := c.ws.WriteMessage(websocket.TextMessage, command)
 		if err != nil {
 			break
 		}
@@ -116,33 +189,58 @@ func (c *connection) writer() {
 }
 
 func (c *connection) Count() int {
-	return len(c.send)
+	return len(c.cmd)
 }
 
-var upgrader = &websocket.Upgrader{ReadBufferSize: DATA_SIZE,
-	WriteBufferSize: DATA_SIZE}
+var upgrader = &websocket.Upgrader{
+	ReadBufferSize:  DATA_SIZE,
+	WriteBufferSize: DATA_SIZE,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
 
 func wsHandler(resp http.ResponseWriter, req *http.Request) {
+	Log("Handling... ")
 	ws, err := upgrader.Upgrade(resp, req, nil)
 	if err != nil {
+		Log("upgrade failed: %s", err.Error())
 		return
 	}
-	log.Printf("Connect")
+	ua := req.Header.Get("User-Agent")
 	c := &connection{
-		send: make(chan []byte, CHANNELS),
-		ws:   ws,
+		cmd: make(chan []byte, CHANNELS),
+		ws:  ws,
+		ua:  ua,
 	}
+	Log("Connecting %s", req.RemoteAddr, ua)
 	h.register <- c
 	defer func() { h.unregister <- c }()
 	go c.writer()
 	c.reader()
 }
 
+func dbinit(db *sql.DB) (err error) {
+	_, err = db.Exec(`create table if not exists resets (time integer primary key, previous integer, ua text);`)
+	return err
+}
+
 func main() {
+	var err error
 	flag.Parse()
 
-	go h.run()
+	Log("Opening db at: %s", *dbPath)
+
+	if db, err = sql.Open("sqlite3", *dbPath); err != nil {
+		log.Fatal("Could not open db: %s", err.Error())
+	}
+	defer db.Close()
+
+	if err = dbinit(db); err != nil {
+		log.Fatal("Could not create table: %s", err.Error())
+	}
+
+	go h.run(db)
 	http.HandleFunc("/metrics", func(resp http.ResponseWriter, req *http.Request) {
+		Log("Metric request...")
 		resp.Write([]byte("Sorry, no metrics yet..."))
 	})
 	http.HandleFunc("/", wsHandler)

@@ -28,14 +28,14 @@
 <h3>Keep up the good work!</h3>
 <audio src="img/buzzer.ogg" id="buzz" />
 </div>
-<input id="reset" type="submit" value="reset" class="r reset" />
+<input id="reset" type="submit" value="reset" class="r reset rok" />
 <div id="webapp">
 <div id="pushctl"><b>Neato! You can do push!</b><br>Tap me to know when resets happen</div>
 <button id="install">Tap me to install as an app.</button>
 </div>
 <div id="bucket" style="display:none"></div>
 <script lang="javascript">
-    var HOST = "awfy.evilonastick.com";
+    var HOST = "192.168.57.10";
     var PORT = ":8080";
     var ws;
     var period = {length:60000, label:"minutes"};
@@ -44,11 +44,6 @@
     function doReset(ws) {
         document.getElementById("buzz").play();
         document.getElementById("length").innerHTML = "0";
-        if (ws == undefined) {
-        console.error("Websocket not present!");
-        } else {
-        ws.send("reset");
-        }
     }
 
     function updateClock() {
@@ -58,10 +53,16 @@
         ll.innerHTML = v + 1;
     }
 
-    document.getElementById("reset").addEventListener("click", function(ws) {
+    function doInit(msg) {
+        document.getElementById("length").innerHTML = msg.last;
+        document.getElementById("prev").innerHTML = msg.previous;
+    }
+
+    document.getElementById("reset").addEventListener("click", function(ev) {
             try {
-                doReset(ws);
+                ws.send("r");
             } catch (x) {
+                console.error(x)
             }
             return true;
             });
@@ -73,17 +74,17 @@ if (window.WebSocket == undefined) {
 ws = new WebSocket("ws://" + HOST + PORT);
 ws.onopen = function(e) {
     console.log("Connected, sending hello");
-    this.send("hello")
+    this.send("i")
 }
 ws.onmessage = function(e) {
     console.log("Got message: ", e.data);
     try {
         msg = JSON.parse(e.data);
         switch (msg.type) {
-            case "update":
-                update(msg.update);
+            case "i":
+                doInit(msg);
                 break;
-            case "reset":
+            case "r":
                 doReset(this);
                 break;
             default:
@@ -93,8 +94,16 @@ ws.onmessage = function(e) {
         console.error("Unknown exception", x)
     }
 };
-ws.onclose = function(e) { console.log("Closing connection", e);};
-ws.onerror = function(e) { console.error("ERROR::", e); };
+ws.onclose = function(e) {
+    alert("Uh-oh. lost connection.");
+    var rr = document.getElementById("reset");
+    rr.classList.add("rbad");
+    rr.classList.remove("rok");
+    console.log("Closing connection", e);
+};
+ws.onerror = function(e) {
+    console.error("ERROR::", e);
+};
 
 setInterval (updateClock, period.length);
 

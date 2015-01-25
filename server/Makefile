@@ -15,3 +15,4 @@ $(DEPS):
 	GOPATH=$(GOPATH) $(GPM) install
 
 build: $(DEPS)
+	GOPATH=$(GOPATH) $(GO) build awfy_server.go
