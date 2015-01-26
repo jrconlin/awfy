@@ -2,7 +2,6 @@
 html {height:100%;}
 body {font-family: Arial; text-align:center;
 background: #eee url('img/office2.jpg') no-repeat center center fixed;
-min-height:100%;
 background-size:cover;
 }
 .days {margin: auto; font-size: 200%; background-image: -moz-linear-gradient(
@@ -106,6 +105,7 @@ display:none;
 }
 
 #pushctl {
+    height:0px;
     display:none;
 }
 
@@ -123,6 +123,14 @@ display:none;
 
 .debug {
     color:white;
+}
+
+#footer {
+position:absolute;
+bottom:2em;
+right:0;
+max-width: 100px;
+max-height: 60px;
 }
 
 @media screen and (min-width: 0px) {

@@ -14,8 +14,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="viewport" content="width = device-width" />
 <meta name="viewport" content="initial-scale = 1.0" />
-<meta property="og:url" content="http://awfy.evilonastick.com/" />
-<meta property="og:image" content="http://awfy.evilonastick.com/img/hr_icon_128.png" />
+<meta property="og:url" content="http://arewefiredyet.com/" />
+<meta property="og:image" content="http://arewefiredyet.com/img/hr_icon_128.png" />
 <meta property="og:title" content="Are we fired yet?" />
 <meta property="og:type" content="website" />
 </head>
@@ -30,12 +30,13 @@
 </div>
 <input id="reset" type="submit" value="reset" class="r reset rok" />
 <div id="webapp">
-<div id="pushctl"><b>Neato! You can do push!</b><br>Tap me to know when resets happen</div>
-<button id="install">Tap me to install as an app.</button>
+    <div id="pushctl"><b>Neato! You can do push!</b><br>Tap me to know when resets happen</div>
+    <button id="install">Tap me to install as an app.</button>
 </div>
 <div id="bucket" style="display:none"></div>
+<div id="footer"><a href="http://evilonastick.com"><img src="img/EoaS.png" title="It's Evil, on a Stick!"></a></div>
 <script lang="javascript">
-    var HOST = "192.168.57.10";
+    var HOST = "arewefiredyet.com";
     var PORT = ":8080";
     var ws;
     var period = {length:60000, label:"minutes"};
@@ -109,7 +110,7 @@ setInterval (updateClock, period.length);
 
 </script>
 <script lang="javascript" src="cookie.js"></script>
-<script lang="javascript" src="app1.js"></script>
+<!--script lang="javascript" src="app1.js"></script -->
 </body>
 <span class="debug">
 <?php
