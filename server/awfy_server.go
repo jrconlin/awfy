@@ -126,6 +126,11 @@ func (h *hub) run(st *store) {
 // storage functions
 // Using sqlite for now.
 
+type usage struct {
+	Count   int64            `json:"count"`
+	Clients map[string]int64 `json:"clients"`
+}
+
 type store struct {
 	db  *sql.DB
 	cmd chan []byte // this probably should be a struct{cmd, args, err}
@@ -188,9 +193,55 @@ func (r *store) run() {
 				r.cmd <- r.getInfo(us[:1])
 			case "r":
 				r.cmd <- r.reset(c[1:])
+			case "s":
+				r.cmd <- r.getMetrics()
 			}
 		}
 	}
+}
+
+func incr(key string, arr map[string]int64) {
+	if _, ok := arr[key]; ok {
+		arr[key] += 1
+		return
+	}
+	arr[key] = 1
+}
+
+func (r *store) getMetrics() (reply []byte) {
+	var err error
+	r.db.Exec(`delete from resets where time < date('now', 'start of day' '-7 day');`)
+	result := &usage{0, make(map[string]int64)}
+	stmt := `select ua from resets where time > date('now','start of day');`
+	rows, err := r.db.Query(stmt)
+	defer rows.Close()
+	if err != nil {
+		Error("ERROR: bad stats %s", err.Error())
+		return
+	}
+	var ua string
+	for rows.Next() {
+		if err = rows.Scan(&ua); err == nil {
+			Error("ERROR: bad stat scan %s", err.Error())
+			return
+		}
+		result.Count++
+		switch {
+		case strings.Contains(ua, "Gecko"):
+			incr("gecko", result.Clients)
+		case strings.Contains(ua, "Chrome"):
+			incr("chrome", result.Clients)
+		case strings.Contains(ua, "AppleWebKit"):
+			incr("ios", result.Clients)
+		default:
+			incr("other", result.Clients)
+		}
+	}
+	reply, err = json.Marshal(result)
+	if err != nil {
+		Error("ERROR: stat marshal %s", err.Error)
+	}
+	return
 }
 
 // connection worker
@@ -313,13 +364,22 @@ func main() {
 	http.HandleFunc("/metrics", func(resp http.ResponseWriter,
 		req *http.Request) {
 		Log("Metric request...")
+		st.cmd <- []byte("s")
+		enc_use := <-st.cmd
+		if enc_use == nil {
+			enc_use = []byte("{}")
+		}
+		use := usage{}
+		json.Unmarshal(enc_use, &use)
 		rep, _ := json.Marshal(
 			struct {
 				Connections int    `json:"number_connections"`
 				Age         string `json:"server_age"`
+				Use         usage  `json:"usage"`
 			}{
 				Connections: h.Count(),
 				Age:         time.Now().UTC().Sub(born).String(),
+				Use:         use,
 			})
 		resp.Write(rep)
 	})
