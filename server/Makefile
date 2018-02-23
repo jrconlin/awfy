@@ -16,3 +16,6 @@ $(DEPS):
 
 build: $(DEPS)
 	GOPATH=$(GOPATH) $(GO) build awfy_server.go
+
+run: $(DEPS)
+	GOPATH=$(GOPATH) $(GO) run awfy_server.go

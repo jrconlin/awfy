@@ -131,6 +131,12 @@ type usage struct {
 	Clients map[string]int64 `json:"clients"`
 }
 
+type reset_response struct {
+		Type     string `json:"type"`
+		Last     int64  `json:"last"`
+		Previous int64  `json:"previous"`
+}
+
 type store struct {
 	db  *sql.DB
 	cmd chan []byte // this probably should be a struct{cmd, args, err}
@@ -143,11 +149,8 @@ func (r *store) getInfo(t string) (reply []byte) {
 	now := time.Now().UTC().Unix() / 60
 	var lastReset int64
 
-	var resp struct {
-		Type     string `json:"type"`
-		Last     int64  `json:"last"`
-		Previous int64  `json:"previous"`
-	}
+	var resp reset_response
+
 	err = row.Scan(&lastReset, &resp.Previous)
 	switch {
 	case err == sql.ErrNoRows:
@@ -383,7 +386,17 @@ func main() {
 			})
 		resp.Write(rep)
 	})
+
 	http.HandleFunc("/", wsHandler)
+
+	http.HandleFunc("/reset", func(resp http.ResponseWriter, req *http.Request) {
+	    Log("Reset...")
+	    st.cmd <- []byte("r")
+	    info := <-st.cmd
+	    reset_info := reset_response{}
+	    json.Unmarshal(info, &reset_info)
+	    resp.Write([]byte(fmt.Sprintf("Clock reset to 0, we were up to %d minutes...", reset_info.Previous)))
+	})
 
 	log.Printf("Starting up server at %s\n", *addr)
 	if err := http.ListenAndServe(*addr, nil); err != nil {
